@@ -24,54 +24,86 @@
   </header>
   <main class="主区">
     <header class="页头">
-      <h1>事件队列详情</h1>
-      <p>单事件对账：事件号 · 占坑态 · 尝试行数 · 中文命运，库页同源</p>
+      <h1>事件详情</h1>
+      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
+
+<section class="卷" data-时钟容忍上限="40">
+  <h2>本次用的是哪一档上限</h2>
+  <p class="说明">骨签：对端时钟快 <b>40 秒（含）以内</b> → <span class="徽章 通过">容忍内通过</span>；快过 40 秒 → <span class="徽章 拒绝">超出容忍已拒</span>。每张票行内冻结秒差、上限档与快照号；旧票读快照，不随签名规改秒而回刷。</p>
+</section>
 
 <section class="卷">
   <label>事件号</label><input id="事件号"/>
   <button class="按钮" type="button" id="查">查询</button>
+  <p class="消息" id="档情"></p>
+  <h2>验签裁决（现行轨）</h2>
+  <div class="表绕"><table><thead><tr><th>裁决号</th><th>会话名</th><th>秒差</th><th>方向</th><th>容忍上限秒</th><th>上限档</th><th>判定</th><th>验签状态</th><th>快照号</th><th>时刻</th></tr></thead><tbody id="裁表"></tbody></table></div>
+  <h2>投递尝试</h2>
+  <div class="表绕"><table><thead><tr><th>尝试号</th><th>状态</th><th>秒差</th><th>上限档</th><th>判定</th><th>拒因</th><th>投递时</th></tr></thead><tbody id="试表"></tbody></table></div>
+  <h2>完整账</h2>
+  <pre id="出" class="说明"></pre>
 </section>
-
-<section class="卷" id="详情卡" hidden>
-  <h2>事件命运卡</h2>
-  <div class="指标">
-    <div class="卡"><small>事件号</small><b id="卡事件号">—</b></div>
-    <div class="卡"><small>占坑态</small><b id="卡占坑态">—</b></div>
-    <div class="卡"><small>尝试行数</small><b id="卡尝试行数">—</b></div>
-    <div class="卡"><small>中文命运</small><b id="卡命运">—</b></div>
-  </div>
-  <h2>尝试明细（正式集合）</h2>
-  <div class="表绕"><table><thead><tr><th>尝试号</th><th>中文命运</th><th>响应码</th><th>签名摘要</th><th>投递时</th></tr></thead><tbody id="尝试表"></tbody></table></div>
-  <h2>占坑记录</h2>
-  <pre id="坑出" class="说明"></pre>
-</section>
-<pre id="出" class="说明"></pre>
 
   </main>
 
 <script>
-document.getElementById('查').onclick = async () => {
-  const id = document.getElementById('事件号').value;
+function 钟徽章(文) {
+  const s = document.createElement('span');
+  s.className = '徽章 ' + (文 === '容忍内通过' ? '成功' : (文 === '超出容忍已拒' ? '失败' : ''));
+  s.textContent = 文 || '—';
+  return s;
+}
+async function 查() {
+  const id = document.getElementById('事件号').value.trim();
+  const 档情 = document.getElementById('档情');
   try {
-    const d = await 投递台.getJSON('/api/事件/'+encodeURIComponent(id));
+    const d = await 投递台.getJSON('/api/事件/' + encodeURIComponent(id));
     document.getElementById('出').textContent = JSON.stringify(d, null, 2);
-    document.getElementById('详情卡').hidden = false;
-    document.getElementById('卡事件号').textContent = d.事件号;
-    document.getElementById('卡占坑态').textContent = d.占坑 ? d.占坑.占坑态 : '未占坑';
-    document.getElementById('卡尝试行数').textContent = d.尝试行数;
-    document.getElementById('卡命运').textContent = d.中文命运 || d.状态;
-    document.getElementById('坑出').textContent = d.占坑 ? JSON.stringify(d.占坑, null, 2) : '该事件尚未占坑';
-    const tb = document.getElementById('尝试表'); tb.innerHTML='';
+    档情.textContent = d.上限档
+      ? ('本事件末次用档：' + d.上限档 + '；容忍上限 ' + d.容忍上限秒 + ' 秒；判定 ' + (d.判定 || ''))
+      : '本事件暂无时钟验签票，默认按 40秒档。';
+
+    const ct = document.getElementById('裁表'); ct.innerHTML = '';
+    const 裁 = d.验签裁决 || await 投递台.getJSON('/api/验签?事件号=' + encodeURIComponent(id)).catch(() => []);
+    for (const r of (裁 || [])) {
+      const tr = 投递台.行(
+        '<td>'+投递台.安全文本(r.裁决号)+'</td>'
+        + '<td>'+投递台.安全文本(r.会话名)+'</td>'
+        + '<td>'+投递台.安全文本(r.秒差)+'</td>'
+        + '<td>'+投递台.安全文本(r.方向)+'</td>'
+        + '<td>'+投递台.安全文本(r.容忍上限秒)+'</td>'
+        + '<td>'+投递台.安全文本(r.上限档)+'</td>'
+        + '<td class="判"></td>'
+        + '<td>'+投递台.安全文本(r.验签状态)+'</td>'
+        + '<td>'+投递台.安全文本(r.快照号)+'</td>'
+        + '<td>'+投递台.安全文本(r.时刻)+'</td>'
+      );
+      tr.querySelector('.判').appendChild(钟徽章(r.判定));
+      ct.appendChild(tr);
+    }
+
+    const tt = document.getElementById('试表'); tt.innerHTML = '';
     for (const r of (d.尝试 || [])) {
-      tb.appendChild(投递台.行('<td>'+投递台.安全文本(r.尝试号)+'</td><td></td><td>'+投递台.安全文本(r.响应码)+'</td><td>'+投递台.安全文本(r.签名摘要)+'</td><td>'+投递台.安全文本(r.投递时)+'</td>'));
-      tb.lastElementChild.children[1].appendChild(投递台.徽章(r.状态 === '成功' ? '投递成功' : '投递失败'));
+      const tr = 投递台.行(
+        '<td>'+投递台.安全文本(r.尝试号)+'</td>'
+        + '<td class="st"></td>'
+        + '<td>'+投递台.安全文本(r.秒差 == null ? '' : r.秒差)+'</td>'
+        + '<td>'+投递台.安全文本(r.上限档 || '')+'</td>'
+        + '<td class="pd"></td>'
+        + '<td>'+投递台.安全文本(r.拒因 || r.说明 || '')+'</td>'
+        + '<td>'+投递台.安全文本(r.投递时)+'</td>'
+      );
+      tr.querySelector('.st').appendChild(投递台.徽章(r.状态));
+      tr.querySelector('.pd').appendChild(钟徽章(r.判定));
+      tt.appendChild(tr);
     }
   } catch (e) {
-    document.getElementById('详情卡').hidden = true;
     document.getElementById('出').textContent = e.message;
+    档情.textContent = '';
   }
-};
+}
+document.getElementById('查').onclick = 查;
 </script>
 
 </body>

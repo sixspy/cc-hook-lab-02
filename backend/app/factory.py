@@ -4,8 +4,7 @@ from pathlib import Path
 from flask import Flask, jsonify, redirect, request, send_from_directory
 
 from app import seed
-from app.modules.并发投递锁 import 占坑冲突, 确保表
-from app.services import 会话, 入队, 投递, 死信, 重试, 互证, 端点, 夹具, 说明, 签名目录
+from app.services import 会话, 入队, 投递, 死信, 重试, 互证, 端点, 夹具, 说明, 签名目录, 验签
 
 _STATIC = Path(__file__).resolve().parent / "static"
 
@@ -98,15 +97,84 @@ def create_app() -> Flask:
     def api_投递():
         body = request.get_json(force=True, silent=True) or {}
         try:
-            return jsonify(投递.投递一次(body["事件号"], bool(body.get("强制失败"))))
-        except 占坑冲突 as e:
-            return jsonify({"错误": str(e), "命运": "投递坑占用，已拒绝重复回刷"}), 409
+            b = dict(body)
+            eid = b.pop("事件号")
+            强制 = b.pop("强制失败", False)
+            # 其余键（对端快秒/对端时刻/秒差/会话名 …）整体透传给时钟验签。
+            return jsonify(投递.投递一次(eid, 强制, **b))
         except (KeyError, ValueError) as e:
             return jsonify({"错误": str(e)}), 400
 
-    @app.get("/api/投递锁")
-    def api_投递锁():
-        return jsonify(签名目录.锁列表())
+    @app.post("/api/验签")
+    @app.post("/api/签名/验签")
+    @app.post("/api/投递验签")
+    @app.post("/api/skew/verify")
+    def api_验签_post():
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            # 时钟超限是“验签动作完成但裁决拒绝”，HTTP 仍 200，由 body.受理/判定表达。
+            return jsonify(验签.验签(body))
+        except ValueError as e:
+            return jsonify({"错误": str(e)}), 400
+
+    @app.get("/api/验签")
+    def api_验签_get():
+        eid = request.args.get("事件号") or request.args.get("event_id") or ""
+        return jsonify(验签.裁决列表(eid or None))
+
+    @app.get("/api/验签/列表")
+    def api_验签列表包():
+        eid = request.args.get("事件号") or request.args.get("event_id") or ""
+        rows = 验签.裁决列表(eid or None)
+        return jsonify({"rows": rows, "裁决": rows, "总数": len(rows)})
+
+    @app.get("/api/验签/影子")
+    def api_验签影子():
+        eid = request.args.get("事件号") or ""
+        return jsonify(验签.影子列表(eid or None))
+
+    @app.get("/api/验签/归档")
+    def api_验签归档():
+        eid = request.args.get("事件号") or ""
+        return jsonify(验签.归档列表(eid or None))
+
+    @app.get("/api/验签/快照")
+    def api_验签快照():
+        return jsonify(验签.快照列表())
+
+    @app.get("/api/验签/读集合")
+    @app.get("/api/时钟容忍")
+    @app.get("/api/skew-tolerance")
+    def api_验签读集合():
+        return jsonify(验签.读集合())
+
+    @app.post("/api/时钟验签")
+    @app.post("/api/clock/verify")
+    def api_时钟验签别名():
+        body = request.get_json(force=True, silent=True) or {}
+        try:
+            return jsonify(验签.验签(body))
+        except ValueError as e:
+            return jsonify({"错误": str(e)}), 400
+
+    @app.post("/api/验签/回刷")
+    def api_验签回刷():
+        body = request.get_json(force=True, silent=True) or {}
+        return jsonify(验签.回刷裁决(body.get("裁决号") or body.get("id") or ""))
+
+    @app.post("/api/验签/影子回写")
+    def api_影子回写():
+        body = request.get_json(force=True, silent=True) or {}
+        return jsonify(验签.影子回写现行(body.get("裁决号") or body.get("id") or ""))
+
+    @app.get("/api/互证/对账时钟")
+    @app.post("/api/互证/对账时钟")
+    @app.get("/api/对账时钟")
+    def api_对账时钟():
+        eid = request.args.get("事件号") or (
+            (request.get_json(silent=True) or {}).get("事件号") if request.method == "POST" else None
+        )
+        return jsonify(互证.对账时钟(eid or None))
 
     @app.post("/api/投递/批量重试")
     def api_批量重试():
@@ -187,5 +255,4 @@ def create_app() -> Flask:
 
     with app.app_context():
         seed.初始化库()
-        确保表()
     return app

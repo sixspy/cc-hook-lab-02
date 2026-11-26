@@ -2,7 +2,6 @@ from __future__ import annotations
 from app.db import 连接
 from app.services.时间 import 此刻
 from app.services import 投递
-from app.modules.并发投递锁 import 释放
 
 
 def 作废(事件号: str, 原因: str = "人工作废") -> dict:
@@ -35,11 +34,6 @@ def 重投(事件号: str) -> dict:
             raise ValueError("死信已处置")
         conn.execute("UPDATE 死信 SET 状态=? WHERE 事件号=?", ("已重投", 事件号))
         conn.execute("UPDATE 事件 SET 状态=?, 更新时=? WHERE 事件号=?", ("待投", t, 事件号))
-        # 回收死信终票坑位：标记已释放，下一次投递在同事务内重新占坑
-        conn.execute(
-            "UPDATE 投递锁 SET 占坑态='已释放', 释放时=?, 中文命运='待投' WHERE 事件号=?",
-            (t, 事件号),
-        )
         conn.execute("INSERT INTO 操作留痕(时刻,操作,事件号,详情) VALUES (?,?,?,?)",
                      (t, "死信重投", 事件号, "回待投"))
         conn.commit()

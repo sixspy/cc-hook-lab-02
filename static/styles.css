@@ -63,14 +63,6 @@
   .徽章.待确认 { background: #fef3c7; color: #92400e; }
   .徽章.已投递 { background: #d1fae5; color: var(--好); }
   .徽章.已作废 { background: #fee2e2; color: var(--险); }
-  .徽章.成功 { background: #d1fae5; color: var(--好); }
-  .徽章.失败 { background: #fee2e2; color: var(--险); }
-  .徽章.占用中 { background: #dbeafe; color: #1e40af; }
-  .徽章.已释放 { background: #fde8c8; color: #9a5700; }
-  .徽章.终票占坑 { background: #e0e7ff; color: #3730a3; }
-  .徽章.死信 { background: #fee2e2; color: var(--险); }
-  .徽章.停用 { background: #e5e7eb; color: #4b5563; }
-  .徽章.启用 { background: #d1fae5; color: var(--好); }
   .按钮 {
     background: var(--靛);
     color: #fff;

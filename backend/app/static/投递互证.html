@@ -28,12 +28,18 @@
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
 
-<section class="卷">
-  <button class="按钮" type="button" id="跑">跑互证</button>
-  <pre id="出" class="说明"></pre>
-  <p class="说明" id="双票"></p>
+<section class="卷" data-时钟容忍上限="40">
+  <h2>验签对账 · 识破超限影子的假绿</h2>
+  <p class="说明">对账只读：按影子行内冻结的<b>秒差</b>与<b>容忍上限秒（40秒档）</b>重算真相，不信可能被写花的“判定”文案。秒差 &gt; 上限却写 <span class="徽章 通过">容忍内通过</span> 的影子会被点名为<b>超限影子/误标假绿</b>，判时钟不对齐；真相超限的票本应是 <span class="徽章 拒绝">超出容忍已拒</span> 并进只读归档。对账不回写影子与现行。</p>
+  <button class="按钮" type="button" id="对账钮">只跑时钟对账（只读）</button>
+  <pre id="时钟出" class="说明"></pre>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>批次号</th><th>时刻</th><th>事件总数</th><th>已投递</th><th>死信</th><th>待投</th><th>对齐</th><th>说明</th></tr></thead><tbody id="表"></tbody></table></div></section>
+
+<section class="卷">
+  <button class="按钮" type="button" id="跑">跑互证（含时钟对齐）</button>
+  <pre id="出" class="说明"></pre>
+</section>
+<section class="卷"><div class="表绕"><table><thead><tr><th>批次号</th><th>时刻</th><th>事件总数</th><th>已投递</th><th>死信</th><th>待投</th><th>对齐</th><th>时钟对齐</th><th>说明</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
@@ -42,16 +48,15 @@ async function 刷表() {
   const rows = await 投递台.getJSON('/api/互证');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    tb.appendChild(投递台.行('<td>'+r.批次号+'</td><td>'+投递台.安全文本(r.时刻)+'</td><td>'+r.事件总数+'</td><td>'+r.已投递数+'</td><td>'+r.死信数+'</td><td>'+r.待投数+'</td><td>'+(r.是否对齐?'是':'否')+'</td><td>'+投递台.安全文本(r.说明)+'</td>'));
+    tb.appendChild(投递台.行('<td>'+r.批次号+'</td><td>'+投递台.安全文本(r.时刻)+'</td><td>'+r.事件总数+'</td><td>'+r.已投递数+'</td><td>'+r.死信数+'</td><td>'+r.待投数+'</td><td>'+(r.是否对齐?'是':'否')+'</td><td>'+(r.时钟对齐 == null ? '—' : (r.时钟对齐 ? '是' : '否'))+'</td><td>'+投递台.安全文本(r.说明)+'</td>'));
   }
 }
 document.getElementById('跑').onclick = async () => {
-  const rep = await 投递台.postJSON('/api/互证/跑',{});
-  document.getElementById('出').textContent = JSON.stringify(rep, null, 2);
-  document.getElementById('双票').textContent = rep.双票数
-    ? '双票异常事件：' + rep.双票异常.join('、') + '（不得按单票已齐对账）'
-    : '无双成功票，单票口径已齐';
+  document.getElementById('出').textContent = JSON.stringify(await 投递台.postJSON('/api/互证/跑',{}), null, 2);
   await 刷表();
+};
+document.getElementById('对账钮').onclick = async () => {
+  document.getElementById('时钟出').textContent = JSON.stringify(await 投递台.getJSON('/api/互证/对账时钟'), null, 2);
 };
 刷表();
 </script>

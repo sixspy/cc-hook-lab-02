@@ -28,6 +28,15 @@
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
 
+<section class="卷" data-时钟容忍上限="40">
+  <h2>入队后投递验签的时钟口径</h2>
+  <p class="说明">对端时钟快 <b>40 秒（含）以内</b>，裁决 <span class="徽章 通过">容忍内通过</span>；快过 40 秒（夹具键快五十秒的签），裁决 <span class="徽章 拒绝">超出容忍已拒</span>，事件不会被投成“已投递”。上限数字 <b>40</b> 写在<a href="/签名规.html">签名规</a>上，档位 <b>40秒档</b>，逐票冻结快照。</p>
+  <label>快速验签 · 事件号</label><input id="快验事件号" placeholder="EVT-..."/>
+  <label>对端快秒</label><input id="快验快秒" type="number" value="50" style="max-width:8rem"/>
+  <button class="按钮 次" type="button" id="快验钮">打一次 /api/验签</button>
+  <span id="快验结果" class="说明"></span>
+</section>
+
 <section class="卷">
   <label>事件类型</label><input id="事件类型" placeholder="例如 invoice.paid"/>
   <label>端点键</label><input id="端点键" placeholder="ep-billing" value="ep-billing"/>
@@ -37,7 +46,7 @@
   <button class="按钮" type="button" id="入队钮">入队（待投）</button>
   <button class="按钮 次" type="button" id="夹具钮">灌夹具样例</button>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>载荷摘要</th><th>占坑态</th><th>尝试行数</th><th>中文命运</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷"><div class="表绕"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>载荷摘要</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
@@ -46,10 +55,8 @@ async function 刷表() {
   const rows = await 投递台.getJSON('/api/事件');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.载荷摘要)+'</td><td></td><td>'+投递台.安全文本(r.尝试行数)+'</td><td></td>');
-    tr.children[4].appendChild(投递台.徽章(r.占坑态 || '未占坑'));
-    tr.children[6].appendChild(投递台.徽章(r.中文命运 || r.状态));
-    tb.appendChild(tr);
+    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.载荷摘要)+'</td><td></td>');
+    tr.children[4].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
   }
 }
 document.getElementById('入队钮').onclick = async () => {
@@ -68,6 +75,16 @@ document.getElementById('入队钮').onclick = async () => {
 document.getElementById('夹具钮').onclick = async () => {
   await 投递台.postJSON('/api/夹具入队/批量事件样例', {});
   await 刷表();
+};
+document.getElementById('快验钮').onclick = async () => {
+  const out = document.getElementById('快验结果');
+  try {
+    const rep = await 投递台.postJSON('/api/验签', {
+      事件号: document.getElementById('快验事件号').value,
+      对端快秒: Number(document.getElementById('快验快秒').value || 0),
+    });
+    out.textContent = '秒差 ' + rep.秒差 + ' / ' + rep.上限档 + ' / ' + rep.判定 + ' / 快照 ' + rep.快照号;
+  } catch (e) { out.textContent = e.message; }
 };
 刷表();
 </script>

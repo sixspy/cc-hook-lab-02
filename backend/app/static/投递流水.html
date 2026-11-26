@@ -25,11 +25,17 @@
   <main class="主区">
     <header class="页头">
       <h1>投递流水</h1>
-      <p>Webhook 并发投递互斥（hook-02）· 同事件先占投递坑再写尝试，占坑与尝试同成同败 · 非工单客服</p>
+      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
+
+<section class="卷" data-时钟容忍上限="40">
+  <h2>验签时钟口径</h2>
+  <p class="说明">对端时钟比本仓快 <b>40 秒（含）以内</b>：<span class="徽章 通过">容忍内通过</span>；快过 40 秒（如快 41 / 50 秒）：<span class="徽章 拒绝">超出容忍已拒</span>。每行流水冻结本次<b>秒差</b>与<b>上限档</b>，账实秒差不能跑出上限。</p>
+</section>
 
 <section class="卷">
   <label>事件号</label><input id="事件号" placeholder="EVT-..."/>
+  <label>对端快秒</label><input id="对端快秒" type="number" placeholder="0（正数=对端时钟快）" style="max-width:10rem"/>
   <label><input type="checkbox" id="强制失败"/> 强制失败（测死信）</label>
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="投递钮">签名投递一次</button>
@@ -37,57 +43,91 @@
 </section>
 
 <section class="卷">
-  <h2>投递坑队列（按事件号占坑，拒绝重复回刷）</h2>
-  <div class="表绕"><table><thead><tr><th>事件号</th><th>占坑态</th><th>轮次</th><th>尝试行数</th><th>尝试号</th><th>中文命运</th><th>占坑时</th></tr></thead><tbody id="坑表"></tbody></table></div>
+  <h2>验签口直测（不落投递）</h2>
+  <label>事件号</label><input id="验签事件号" placeholder="EVT-..."/>
+  <label>会话名</label><input id="会话名" placeholder="左/右" style="max-width:8rem"/>
+  <label>对端快秒</label><input id="验签快秒" type="number" value="50" style="max-width:8rem"/>
+  <button class="按钮" type="button" id="验签钮">只验签</button>
+  <button class="按钮 次" type="button" id="双发钮">同时抢两次验签（30 与 50，一成一拒）</button>
+  <pre id="验签出" class="说明"></pre>
 </section>
 
-<section class="卷">
-  <h2>投递流水卡片（正式尝试集合）</h2>
-  <div class="表绕"><table><thead><tr><th>尝试号</th><th>事件号</th><th>端点键</th><th>签名摘要</th><th>中文命运</th><th>响应码</th><th>说明</th></tr></thead><tbody id="表"></tbody></table></div>
-</section>
+<section class="卷"><div class="表绕"><table><thead><tr><th>尝试号</th><th>事件号</th><th>端点键</th><th>签名摘要</th><th>状态</th><th>响应码</th><th>秒差</th><th>上限档</th><th>验签判定</th><th>快照号</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
 <script>
-const 命运文案 = { '成功': '投递成功', '失败': '投递失败，待重试或入死信' };
-
-async function 刷坑表() {
-  const rows = await 投递台.getJSON('/api/投递锁');
-  const tb = document.getElementById('坑表'); tb.innerHTML='';
-  for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td></td><td>'+投递台.安全文本(r.轮次)+'</td><td>'+投递台.安全文本(r.尝试行数 ?? 0)+'</td><td>'+投递台.安全文本(r.尝试号||'—')+'</td><td>'+投递台.安全文本(r.中文命运||'—')+'</td><td>'+投递台.安全文本(r.占坑时)+'</td>');
-    tr.children[1].appendChild(投递台.徽章(r.占坑态)); tb.appendChild(tr);
-  }
+function 钟徽章(文) {
+  const s = document.createElement('span');
+  s.className = '徽章 ' + (文 === '容忍内通过' ? '成功' : (文 === '超出容忍已拒' ? '失败' : ''));
+  s.textContent = 文 || '—';
+  return s;
 }
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/投递');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.尝试号)+'</td><td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.签名摘要)+'</td><td></td><td>'+投递台.安全文本(r.响应码)+'</td><td>'+投递台.安全文本(r.说明)+'</td>');
-    const 命 = document.createElement('span');
-    命.textContent = (r.状态 === '成功' ? '投递成功' : '投递失败');
-    命.className = '徽章 ' + r.状态;
-    tr.children[4].appendChild(命);
+    const tr = 投递台.行(
+      '<td>'+投递台.安全文本(r.尝试号)+'</td>'
+      + '<td>'+投递台.安全文本(r.事件号)+'</td>'
+      + '<td>'+投递台.安全文本(r.端点键)+'</td>'
+      + '<td>'+投递台.安全文本(r.签名摘要)+'</td>'
+      + '<td class="状态格"></td>'
+      + '<td>'+投递台.安全文本(r.响应码)+'</td>'
+      + '<td>'+投递台.安全文本(r.秒差 == null ? '' : r.秒差)+'</td>'
+      + '<td>'+投递台.安全文本(r.上限档 || '')+'</td>'
+      + '<td class="判定格"></td>'
+      + '<td>'+投递台.安全文本(r.快照号 || '')+'</td>'
+    );
+    tr.querySelector('.状态格').appendChild(投递台.徽章(r.状态));
+    tr.querySelector('.判定格').appendChild(钟徽章(r.判定));
     tb.appendChild(tr);
   }
 }
 document.getElementById('投递钮').onclick = async () => {
   const 消息 = document.getElementById('消息');
   try {
-    const rep = await 投递台.postJSON('/api/投递', {
+    const 快 = document.getElementById('对端快秒').value;
+    const body = {
       事件号: document.getElementById('事件号').value,
       强制失败: document.getElementById('强制失败').checked,
-    });
+    };
+    if (快 !== '') body['对端快秒'] = Number(快);
+    const rep = await 投递台.postJSON('/api/投递', body);
     消息.textContent = JSON.stringify(rep);
-    await 刷表(); await 刷坑表();
+    await 刷表();
   } catch (e) { 消息.textContent = e.message; }
 };
 document.getElementById('批量钮').onclick = async () => {
   const rep = await 投递台.postJSON('/api/投递/批量重试', {});
   document.getElementById('消息').textContent = '批量 '+rep.条数;
-  await 刷表(); await 刷坑表();
+  await 刷表();
 };
-刷表(); 刷坑表();
+document.getElementById('验签钮').onclick = async () => {
+  const out = document.getElementById('验签出');
+  try {
+    const rep = await 投递台.postJSON('/api/验签', {
+      事件号: document.getElementById('验签事件号').value,
+      会话名: document.getElementById('会话名').value,
+      对端快秒: Number(document.getElementById('验签快秒').value || 0),
+    });
+    out.textContent = JSON.stringify(rep, null, 2);
+  } catch (e) { out.textContent = e.message; }
+};
+document.getElementById('双发钮').onclick = async () => {
+  const out = document.getElementById('验签出');
+  const id = document.getElementById('验签事件号').value || ('EVT-RACE-' + Date.now());
+  // 两个并发请求各带不同对端时钟：后端按事件命名锁串行封快照、各落各票。
+  const [a, b] = await Promise.all([
+    投递台.postJSON('/api/验签', {事件号: id, 会话名: '左', 对端快秒: 30}),
+    投递台.postJSON('/api/验签', {事件号: id, 会话名: '右', 对端快秒: 50}),
+  ]);
+  out.textContent = JSON.stringify([
+    {会话名: '左', 秒差: a.秒差, 判定: a.判定, 上限档: a.上限档},
+    {会话名: '右', 秒差: b.秒差, 判定: b.判定, 上限档: b.上限档},
+  ], null, 2) + '\n（预期：左=容忍内通过，右=超出容忍已拒，互不覆盖）';
+};
+刷表();
 </script>
 
 </body>

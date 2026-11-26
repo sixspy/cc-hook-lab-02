@@ -25,8 +25,19 @@
   <main class="主区">
     <header class="页头">
       <h1>签名规</h1>
-      <p>签名口径与并发投递互斥策略（hook-02-并发投递互斥）· 非工单客服</p>
+      <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
+
+<section class="卷" data-hook="hook-02" data-时钟容忍上限="40">
+  <h2>验签时钟容忍上限 · 骨签四十秒</h2>
+  <p class="说明">对端时钟比本仓快 <b>40 秒（含）以内</b>仍容忍；快过 <b>40 秒</b>必须拒绝。上限数字 <b>40</b> 就写在本签名规上（键：时钟容忍秒=40），投递验签按该上限比较。</p>
+  <p class="说明">裁决原文只有两档：<span class="徽章 通过">容忍内通过</span> ／ <span class="徽章 拒绝">超出容忍已拒</span>。当前档位：<b id="时钟上限档">40秒档</b>（现行读集合：<span id="读引用">签名规:时钟容忍秒</span>）。</p>
+  <p class="说明">工程形态：验签瞬间把上限封进<b>快照表</b>（验签上限快照）；事后改签名规秒数，旧快照/旧裁决<b>拒绝回刷</b>；超限旧裁决进<b>只读归档</b>；现行验签改绑含新上限的<b>读集合</b>；快慢偏差双写<b>裁决轨</b>与<b>影子轨</b>两轨，影子裁决不能回写成现行。</p>
+  <label>时钟容忍秒</label><input id="时钟容忍秒" type="number" min="0" value="40"/>
+  <button class="按钮" type="button" id="改时钟钮">改时钟上限（新验签绑新档，旧票不回刷）</button>
+  <button class="按钮 次" type="button" id="刷快照钮">刷新快照表</button>
+  <p class="消息" id="时钟消息"></p>
+</section>
 
 <section class="卷">
   <label>键</label><input id="键" placeholder="最大重试"/>
@@ -34,15 +45,8 @@
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="保存">保存签名规</button>
 </section>
-<section class="卷"><pre id="规" class="说明"></pre></section>
-
-<section class="卷">
-  <h2>并发投递互斥策略（择定形态）</h2>
-  <p class="说明" id="策略"></p>
-  <h2>中文命运词表</h2>
-  <p class="说明" id="词表"></p>
-  <div class="指标" id="坑指标"></div>
-</section>
+<section class="卷"><h2>签名规键值（上限数字 40 供人核对）</h2><pre id="规" class="说明"></pre></section>
+<section class="卷"><h2>验签上限快照（只增不改，旧档拒绝回刷）</h2><pre id="快照" class="说明"></pre></section>
 
   </main>
 
@@ -50,15 +54,19 @@
 async function 刷() {
   const 规 = await 投递台.getJSON('/api/签名规');
   document.getElementById('规').textContent = JSON.stringify(规, null, 2);
-  document.getElementById('策略').textContent = 规['并发互斥'] || '独立队列按事件号占投递坑并拒绝重复回刷';
-  document.getElementById('词表').textContent = 规['中文命运'] || '待投/投递中/已投递/死信；占用中/已释放/终票占坑';
-  const 概 = await 投递台.getJSON('/api/概览');
-  const box = document.getElementById('坑指标'); box.innerHTML='';
-  for (const k of ['占用坑位','终票坑位','双票事件']) {
-    const d = document.createElement('div'); d.className='卡';
-    d.innerHTML = '<small>'+投递台.安全文本(k)+'</small><b>'+投递台.安全文本(概[k] ?? 0)+'</b>';
-    box.appendChild(d);
-  }
+  const n = 规['时钟容忍秒'] || 规['容忍上限秒'] || 40;
+  document.getElementById('时钟容忍秒').value = String(n).replace(/[^0-9-]/g, '') || 40;
+  document.getElementById('时钟上限档').textContent = 规['时钟容忍上限档'] || (n + '秒档');
+  try {
+    const 集 = await 投递台.getJSON('/api/验签/读集合');
+    document.getElementById('读引用').textContent = 集['读引用'] || ('签名规:' + (集['规则键'] || '时钟容忍秒'));
+    document.getElementById('时钟上限档').textContent = 集['上限档'] || document.getElementById('时钟上限档').textContent;
+  } catch (e) { /* 旧后端无读集合口时忽略 */ }
+}
+async function 刷快照() {
+  try {
+    document.getElementById('快照').textContent = JSON.stringify(await 投递台.getJSON('/api/验签/快照'), null, 2);
+  } catch (e) { document.getElementById('快照').textContent = '快照口不可用：' + e.message; }
 }
 document.getElementById('保存').onclick = async () => {
   try {
@@ -69,7 +77,18 @@ document.getElementById('保存').onclick = async () => {
     await 刷();
   } catch (e) { document.getElementById('消息').textContent = e.message; }
 };
+document.getElementById('改时钟钮').onclick = async () => {
+  const msg = document.getElementById('时钟消息');
+  try {
+    const v = document.getElementById('时钟容忍秒').value;
+    const 规 = await 投递台.postJSON('/api/签名规', {'时钟容忍秒': v});
+    msg.textContent = '已改签名规：时钟容忍秒=' + v + '；新验签走 ' + v + '秒档，旧快照旧裁决拒绝回刷';
+    await 刷(); await 刷快照();
+  } catch (e) { msg.textContent = e.message; }
+};
+document.getElementById('刷快照钮').onclick = 刷快照;
 刷();
+刷快照();
 </script>
 
 </body>

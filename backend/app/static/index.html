@@ -28,8 +28,12 @@
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
 
+<section class="卷" data-hook="hook-02" data-时钟容忍上限="40">
+  <h2>验签时钟容忍 · 骨签：超出四十秒必须拒绝</h2>
+  <p class="说明">对端时钟比本仓快 <b>40 秒（含）以内</b>：<span class="徽章 通过">容忍内通过</span>；快过 40 秒（+41 / 键快五十秒的签 +50）：<span class="徽章 拒绝">超出容忍已拒</span>。上限 <b>40</b> 写在<a href="/签名规.html">签名规</a>（40秒档）；验签瞬间封快照、旧裁决拒绝回刷，超限票进只读归档，裁决/影子双写两轨，影子不能回写现行。逐页可核：<a href="/签名规.html">签名规</a> · <a href="/投递流水.html">流水</a> · <a href="/事件详情.html">详情</a> · <a href="/事件队列.html">队列</a> · <a href="/死信匣.html">死信匣</a> · <a href="/投递互证.html">互证对账</a>。</p>
+</section>
 <section class="卷"><div class="指标" id="指标"></div></section>
-<section class="卷"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>占坑态</th><th>尝试行数</th><th>中文命运</th></tr></thead><tbody id="表"></tbody></table></section>
+<section class="卷"><table><thead><tr><th>事件号</th><th>事件类型</th><th>端点键</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></section>
 <section class="卷"><p class="说明" id="主链"></p><button class="按钮" type="button" id="互证钮">跑投递互证</button><pre id="互证出" class="说明"></pre></section>
 
   </main>
@@ -49,10 +53,8 @@
   const rows = await 投递台.getJSON('/api/事件');
   const tb = document.getElementById('表');
   for (const r of rows.slice(0,12)) {
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td></td><td>'+投递台.安全文本(r.尝试行数 ?? 0)+'</td><td></td>');
-    tr.children[3].appendChild(投递台.徽章(r.占坑态 || '未占坑'));
-    tr.children[5].appendChild(投递台.徽章(r.中文命运 || r.状态));
-    tb.appendChild(tr);
+    const tr = 投递台.行('<td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.事件类型)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td></td>');
+    tr.children[3].appendChild(投递台.徽章(r.状态)); tb.appendChild(tr);
   }
   document.getElementById('互证钮').onclick = async () => {
     document.getElementById('互证出').textContent = JSON.stringify(await 投递台.postJSON('/api/互证/跑',{}), null, 2);

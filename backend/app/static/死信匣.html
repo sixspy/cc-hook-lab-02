@@ -28,25 +28,46 @@
       <p>Webhook 投递控制台 · 应用开发全栈 · 非工单客服</p>
     </header>
 
+<section class="卷" data-时钟容忍上限="40">
+  <h2>死信也要看得见上限档</h2>
+  <p class="说明">快过 <b>40 秒</b>的签裁决为 <span class="徽章 拒绝">超出容忍已拒</span>，不得写成 <span class="徽章 通过">容忍内通过</span> 混进投递成功；相关超限旧裁决已进<b>只读归档</b>。下表“上限档/秒差/验签判定”取自末次投递验签票。</p>
+</section>
+
 <section class="卷">
   <label>事件号</label><input id="事件号"/>
   <p class="消息" id="消息"></p>
   <button class="按钮" type="button" id="重投钮">死信重投</button>
   <button class="按钮 次" type="button" id="作废钮">作废</button>
 </section>
-<section class="卷"><div class="表绕"><table><thead><tr><th>死信号</th><th>事件号</th><th>端点键</th><th>失败次数</th><th>末次原因</th><th>中文命运</th></tr></thead><tbody id="表"></tbody></table></div></section>
+<section class="卷"><div class="表绕"><table><thead><tr><th>死信号</th><th>事件号</th><th>端点键</th><th>失败次数</th><th>末次原因</th><th>秒差</th><th>上限档</th><th>验签判定</th><th>状态</th></tr></thead><tbody id="表"></tbody></table></div></section>
 
   </main>
 
 <script>
+function 钟徽章(文) {
+  const s = document.createElement('span');
+  s.className = '徽章 ' + (文 === '容忍内通过' ? '成功' : (文 === '超出容忍已拒' ? '失败' : ''));
+  s.textContent = 文 || '—';
+  return s;
+}
 async function 刷表() {
   const rows = await 投递台.getJSON('/api/死信');
   const tb = document.getElementById('表'); tb.innerHTML='';
   for (const r of rows) {
-    const 命 = r.状态 === '待处置' ? '死信待处置' : (r.状态 === '已重投' ? '死信已重投' : '死信已作废');
-    const tr = 投递台.行('<td>'+投递台.安全文本(r.死信号)+'</td><td>'+投递台.安全文本(r.事件号)+'</td><td>'+投递台.安全文本(r.端点键)+'</td><td>'+投递台.安全文本(r.失败次数)+'</td><td>'+投递台.安全文本(r.末次原因)+'</td><td></td>');
-    const 徽 = 投递台.徽章(命); 徽.className = '徽章 死信';
-    tr.children[5].appendChild(徽); tb.appendChild(tr);
+    const tr = 投递台.行(
+      '<td>'+投递台.安全文本(r.死信号)+'</td>'
+      + '<td>'+投递台.安全文本(r.事件号)+'</td>'
+      + '<td>'+投递台.安全文本(r.端点键)+'</td>'
+      + '<td>'+投递台.安全文本(r.失败次数)+'</td>'
+      + '<td>'+投递台.安全文本(r.末次原因)+'</td>'
+      + '<td>'+投递台.安全文本(r.秒差 == null ? '' : r.秒差)+'</td>'
+      + '<td>'+投递台.安全文本(r.上限档 || '')+'</td>'
+      + '<td class="pd"></td>'
+      + '<td class="st"></td>'
+    );
+    tr.querySelector('.pd').appendChild(钟徽章(r.末次验签判定 || r.判定));
+    tr.querySelector('.st').appendChild(投递台.徽章(r.状态));
+    tb.appendChild(tr);
   }
 }
 document.getElementById('重投钮').onclick = async () => {
