@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>事件详情 · 投递台</title>
+  <link rel="stylesheet" href="/styles.css"/>
+  <script src="/common.js"></script>
+</head>
+<body>
+<header class="顶栏">
+    <div class="牌">投递台</div>
+    <nav>
+      <a href="/">投递台</a>
+      <a href="/端点名册.html">端点名册</a>
+      <a href="/事件队列.html">事件队列</a>
+      <a href="/投递流水.html">投递流水</a>
+      <a href="/死信匣.html">死信匣</a>
+      <a href="/签名规.html">签名规</a>
+      <a href="/投递互证.html">投递互证</a>
+      <a href="/事件详情.html" class="亮">事件详情</a>
+    </nav>
+    <button class="按钮 次" type="button" onclick="fetch('/api/登出',{method:'POST'}).then(()=>location.href='/login')">退出</button>
+  </header>
+  <main class="主区">
+    <header class="页头">
+      <h1>事件队列详情</h1>
+      <p>单事件对账：事件号 · 占坑态 · 尝试行数 · 中文命运，库页同源</p>
+    </header>
+
+<section class="卷">
+  <label>事件号</label><input id="事件号"/>
+  <button class="按钮" type="button" id="查">查询</button>
+</section>
+
+<section class="卷" id="详情卡" hidden>
+  <h2>事件命运卡</h2>
+  <div class="指标">
+    <div class="卡"><small>事件号</small><b id="卡事件号">—</b></div>
+    <div class="卡"><small>占坑态</small><b id="卡占坑态">—</b></div>
+    <div class="卡"><small>尝试行数</small><b id="卡尝试行数">—</b></div>
+    <div class="卡"><small>中文命运</small><b id="卡命运">—</b></div>
+  </div>
+  <h2>尝试明细（正式集合）</h2>
+  <div class="表绕"><table><thead><tr><th>尝试号</th><th>中文命运</th><th>响应码</th><th>签名摘要</th><th>投递时</th></tr></thead><tbody id="尝试表"></tbody></table></div>
+  <h2>占坑记录</h2>
+  <pre id="坑出" class="说明"></pre>
+</section>
+<pre id="出" class="说明"></pre>
+
+  </main>
+
+<script>
+document.getElementById('查').onclick = async () => {
+  const id = document.getElementById('事件号').value;
+  try {
+    const d = await 投递台.getJSON('/api/事件/'+encodeURIComponent(id));
+    document.getElementById('出').textContent = JSON.stringify(d, null, 2);
+    document.getElementById('详情卡').hidden = false;
+    document.getElementById('卡事件号').textContent = d.事件号;
+    document.getElementById('卡占坑态').textContent = d.占坑 ? d.占坑.占坑态 : '未占坑';
+    document.getElementById('卡尝试行数').textContent = d.尝试行数;
+    document.getElementById('卡命运').textContent = d.中文命运 || d.状态;
+    document.getElementById('坑出').textContent = d.占坑 ? JSON.stringify(d.占坑, null, 2) : '该事件尚未占坑';
+    const tb = document.getElementById('尝试表'); tb.innerHTML='';
+    for (const r of (d.尝试 || [])) {
+      tb.appendChild(投递台.行('<td>'+投递台.安全文本(r.尝试号)+'</td><td></td><td>'+投递台.安全文本(r.响应码)+'</td><td>'+投递台.安全文本(r.签名摘要)+'</td><td>'+投递台.安全文本(r.投递时)+'</td>'));
+      tb.lastElementChild.children[1].appendChild(投递台.徽章(r.状态 === '成功' ? '投递成功' : '投递失败'));
+    }
+  } catch (e) {
+    document.getElementById('详情卡').hidden = true;
+    document.getElementById('出').textContent = e.message;
+  }
+};
+</script>
+
+</body>
+</html>
